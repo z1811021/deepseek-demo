@@ -47,7 +47,7 @@ const Register: React.FC = () => {
 						const xhr = new XMLHttpRequest();
 						xhr.open(
 							"POST",
-							"http://47.94.59.81:8089/basic/register",
+							"/api/basic/register",
 							true,
 						);
 						xhr.timeout = 10000; // 10秒超时

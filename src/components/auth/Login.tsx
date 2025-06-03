@@ -53,7 +53,7 @@ const Login: React.FC = () => {
 						const xhr = new XMLHttpRequest();
 						xhr.open(
 							"POST",
-							"http://47.94.59.81:8089/basic/auth",
+							"/api/basic/auth",
 							true,
 						);
 						xhr.timeout = 10000; // 10秒超时
