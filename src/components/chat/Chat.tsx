@@ -2,22 +2,12 @@ import { useXAgent, useXChat, Sender, Bubble } from "@ant-design/x";
 import { UserOutlined } from "@ant-design/icons";
 import type { BubbleProps } from "@ant-design/x";
 import OpenAI from "openai";
-import { Flex, type GetProp, Typography, Space, Spin } from "antd";
-import React, { useEffect } from "react";
+import { Flex, type GetProp, Typography, Space, Spin, Switch } from "antd";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import markdownit from "markdown-it";
 import "./chat.css";
 const md = markdownit({ html: true, breaks: true });
-
-const client = new OpenAI({
-	baseURL: "https://api.deepseek.com/v1",
-	// 模型名称
-
-	// apiKey: import.meta.env.VITE_DEEPSEEK_API_KEY,
-	apiKey: "sk-71b286b74c4f4285863d4e9f2861e8cb",
-	dangerouslyAllowBrowser: true,
-});
-
 const roles: GetProp<typeof Bubble.List, "roles"> = {
 	ai: {
 		placement: "start",
@@ -44,7 +34,10 @@ const renderMarkdown: BubbleProps["messageRender"] = (content) => {
 };
 
 const Chat: React.FC = () => {
-	const [content, setContent] = React.useState("");
+	const [content, setContent] = useState("");
+	const [currentModel, setCurrentModel] = useState<"deepseek" | "qwen">(
+		"deepseek",
+	);
 	const navigate = useNavigate();
 
 	// 检查用户是否已登录
@@ -55,32 +48,52 @@ const Chat: React.FC = () => {
 		}
 	}, [navigate]);
 
+	const client = useMemo(() => {
+		console.log("Creating new client for model:", currentModel);
+		const baseURL =
+			currentModel === "deepseek"
+				? "https://api.deepseek.com/v1"
+				: "https://dashscope.aliyuncs.com/compatible-mode/v1";
+		const apiKey =
+			currentModel === "deepseek"
+				? "sk-71b286b74c4f4285863d4e9f2861e8cb"
+				: "sk-df7515632a19474e80715111c8440c5e";
+		console.log("Using baseURL:", baseURL);
+		return new OpenAI({
+			baseURL,
+			apiKey,
+			dangerouslyAllowBrowser: true,
+		});
+	}, [currentModel]);
+
 	const [agent] = useXAgent({
 		request: async (info, callbacks) => {
 			const { messages, message } = info;
-
 			const { onSuccess, onUpdate } = callbacks;
 
-			// current message
 			console.log("message", message);
-
-			// history messages
 			console.log("messages", messages);
+			console.log(
+				"🚀 ~ request: ~ client:",
+				client,
+				"currentModel:",
+				currentModel,
+			);
 
 			let content: string = "";
 
 			try {
 				const stream = await client.chat.completions.create({
-					model: "deepseek-reasoner",
-					// if chat context is needed, modify the array
+					model:
+						currentModel === "deepseek"
+							? "deepseek-reasoner"
+							: "qwen-plus",
 					messages: [{ role: "user", content: message ?? "" }],
-					// stream mode
 					stream: true,
 				});
 
 				for await (const chunk of stream) {
 					content += chunk.choices[0]?.delta?.content || "";
-
 					onUpdate(content);
 				}
 
@@ -93,15 +106,62 @@ const Chat: React.FC = () => {
 		},
 	});
 
-	const {
-		// use to send message
-		onRequest,
-		// use to render messages
-		messages,
-	} = useXChat({ agent });
+	const request = useCallback(async (info: any, callbacks: any) => {
+		const { messages, message } = info;
+		const { onSuccess, onUpdate } = callbacks;
+
+		console.log("message", message);
+		console.log("messages", messages);
+		console.log(
+			"🚀 ~ request: ~ client:",
+			client,
+			"currentModel:",
+			currentModel,
+		);
+
+		let content: string = "";
+
+		try {
+			const stream = await client.chat.completions.create({
+				model:
+					currentModel === "deepseek"
+						? "deepseek-reasoner"
+						: "qwen-plus",
+				messages: [{ role: "user", content: message ?? "" }],
+				stream: true,
+			});
+
+			for await (const chunk of stream) {
+				content += chunk.choices[0]?.delta?.content || "";
+				onUpdate(content);
+			}
+
+			onSuccess(content);
+		} catch (error) {
+			console.log("🚀 ~ request: ~ error:", error);
+			// handle error
+			// onError();
+		}
+	}, [client, currentModel]);
+
+	const { onRequest, messages } = useXChat({ agent: { request } });
 
 	return (
 		<Flex vertical gap="middle">
+			<Flex justify="flex-end" style={{ marginBottom: "10px" }}>
+				<Switch
+					checkedChildren="Qwen"
+					unCheckedChildren="Deepseek"
+					checked={currentModel === "qwen"}
+					onChange={(checked) => {
+						console.log(
+							"Switching to model:",
+							checked ? "qwen" : "deepseek",
+						);
+						setCurrentModel(checked ? "qwen" : "deepseek");
+					}}
+				/>
+			</Flex>
 			<Bubble.List
 				roles={roles}
 				items={messages.map(({ id, message, status }) => ({
