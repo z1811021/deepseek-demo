@@ -1,11 +1,22 @@
 import { useXAgent, useXChat, Sender, Bubble } from "@ant-design/x";
-import { UserOutlined } from "@ant-design/icons";
+import { UserOutlined, PictureOutlined } from "@ant-design/icons";
 import type { BubbleProps } from "@ant-design/x";
 import OpenAI from "openai";
-import { Flex, type GetProp, Typography, Space, Spin, Switch } from "antd";
+import {
+	Flex,
+	type GetProp,
+	Typography,
+	Space,
+	Spin,
+	Switch,
+	Button,
+} from "antd";
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import markdownit from "markdown-it";
+import photo1 from "./photo1.avif";
+import photo2 from "./photo2.avif";
+import photo3 from "./photo3.avif";
 import "./chat.css";
 const md = markdownit({ html: true, breaks: true });
 const roles: GetProp<typeof Bubble.List, "roles"> = {
@@ -38,8 +49,20 @@ const Chat: React.FC = () => {
 	const [currentModel, setCurrentModel] = useState<"deepseek" | "qwen">(
 		"deepseek",
 	);
+	const [currentBackground, setCurrentBackground] = useState<number>(0);
+	const backgrounds = [photo1, photo2, photo3];
 	const navigate = useNavigate();
 
+	const changeBackground = () => {
+		setCurrentBackground((prev) => (prev + 1) % backgrounds.length);
+	};
+	useEffect(() => {
+		document.body.style.backgroundImage = `url(${backgrounds[currentBackground]})`;
+		document.body.style.backgroundSize = "cover";
+		document.body.style.backgroundPosition = "center";
+		document.body.style.backgroundAttachment = "fixed";
+		document.body.style.color = "white"; // 设置文字颜色为白色，以提高可读性
+	}, [currentBackground, backgrounds]);
 	// 检查用户是否已登录
 	useEffect(() => {
 		const userInfo = sessionStorage.getItem("userInfo");
@@ -106,49 +129,59 @@ const Chat: React.FC = () => {
 		},
 	});
 
-	const request = useCallback(async (info: any, callbacks: any) => {
-		const { messages, message } = info;
-		const { onSuccess, onUpdate } = callbacks;
+	const request = useCallback(
+		async (info: any, callbacks: any) => {
+			const { messages, message } = info;
+			const { onSuccess, onUpdate } = callbacks;
 
-		console.log("message", message);
-		console.log("messages", messages);
-		console.log(
-			"🚀 ~ request: ~ client:",
-			client,
-			"currentModel:",
-			currentModel,
-		);
+			console.log("message", message);
+			console.log("messages", messages);
+			console.log(
+				"🚀 ~ request: ~ client:",
+				client,
+				"currentModel:",
+				currentModel,
+			);
 
-		let content: string = "";
+			let content: string = "";
 
-		try {
-			const stream = await client.chat.completions.create({
-				model:
-					currentModel === "deepseek"
-						? "deepseek-reasoner"
-						: "qwen-plus",
-				messages: [{ role: "user", content: message ?? "" }],
-				stream: true,
-			});
+			try {
+				const stream = await client.chat.completions.create({
+					model:
+						currentModel === "deepseek"
+							? "deepseek-reasoner"
+							: "qwen-plus",
+					messages: [{ role: "user", content: message ?? "" }],
+					stream: true,
+				});
 
-			for await (const chunk of stream) {
-				content += chunk.choices[0]?.delta?.content || "";
-				onUpdate(content);
+				for await (const chunk of stream) {
+					content += chunk.choices[0]?.delta?.content || "";
+					onUpdate(content);
+				}
+
+				onSuccess(content);
+			} catch (error) {
+				console.log("🚀 ~ request: ~ error:", error);
+				// handle error
+				// onError();
 			}
-
-			onSuccess(content);
-		} catch (error) {
-			console.log("🚀 ~ request: ~ error:", error);
-			// handle error
-			// onError();
-		}
-	}, [client, currentModel]);
+		},
+		[client, currentModel],
+	);
 
 	const { onRequest, messages } = useXChat({ agent: { request } });
 
 	return (
 		<Flex vertical gap="middle">
 			<Flex justify="flex-end" style={{ marginBottom: "10px" }}>
+				<Button
+					className="change-background-btn"
+					icon={<PictureOutlined />}
+					onClick={changeBackground}
+				>
+					切换背景
+				</Button>
 				<Switch
 					checkedChildren="Qwen"
 					unCheckedChildren="Deepseek"
